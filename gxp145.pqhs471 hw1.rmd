@@ -104,9 +104,9 @@ cor(subset(Auto, select=-name))
 auto.fit <- lm(mpg~.-name, data = Auto)
 summary(auto.fit)
 ```
-i. There is a statistically significant association between MPG and displacement, weight, year, and origin. 
-ii. Displacement, weight, year, and origin.
-iii. Newer cars have higher MPG: average MPG improves by 0.7508 per year. 
+1. There is a statistically significant association between MPG and displacement, weight, year, and origin. 
+2. Displacement, weight, year, and origin.
+3. Newer cars have higher MPG: average MPG improves by 0.7508 per year. 
 #9d
 ```{r}
 par(mfrow=c(2,2))
