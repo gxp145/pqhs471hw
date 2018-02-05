@@ -2,7 +2,7 @@
 title: "PQHS 471 Homework 1; Gregory Powers"
 output: html_notebook
 ---
-##8a 
+#8a 
 loads data into r from a csv
 
 ```{r}
@@ -301,17 +301,17 @@ summary(lm(crim~poly(medv, 3), data = Boston))
 ```
 Results: 
 
-ZN: significant linear and quadratic association. 
-Indus: linear, quadratic and cubic.
-Nox: linear, quadratic and cubic.
-Rm: linear and quadratic.
-Dis: linear, quadratic and cubic.
-Rad: linear and quadratic.
-Tax: linear and quadratic.
-Ptratio: linear, quadratic and cubic.
-Black: linear only. 
-Lstat: linear and quadratic.
-Medv: linear, quadratic and cubic.
+1. ZN: significant linear and quadratic association. 
+2. Indus: linear, quadratic and cubic.
+3. Nox: linear, quadratic and cubic.
+4. Rm: linear and quadratic.
+5. Dis: linear, quadratic and cubic.
+6. Rad: linear and quadratic.
+7. Tax: linear and quadratic.
+8. Ptratio: linear, quadratic and cubic.
+9. Black: linear only. 
+10. Lstat: linear and quadratic.
+11. Medv: linear, quadratic and cubic.
 
 #Chapter 4
 #13
@@ -453,12 +453,12 @@ mean(knn6 != ctest$c01)
 ```
 Using all variables in the data set:
 
-k=1 produces a model with a 6.9% error rate
-k=5 produces a model with a 6.9% error rate
-k=10 produces a model with a 10.89% error rate
-k=25 produces a model with a 15.84% error rate
-k=50 produces a model with a 17.82% error rate
-k=150 produces a model with a 13.86% error rate
+1. k=1 produces a model with a 6.9% error rate
+2. k=5 produces a model with a 6.9% error rate
+3. k=10 produces a model with a 10.89% error rate
+4. k=25 produces a model with a 15.84% error rate
+5. k=50 produces a model with a 17.82% error rate
+6. k=150 produces a model with a 13.86% error rate
 
 ```{r}
 #Here only the most strongly correlated variables with c01 are kept
@@ -478,10 +478,10 @@ mean(knn25 != ctest$c01)
 knn26 <- knn(train.x2, test.x2, ctrain$c01, k=150)
 mean(knn26 != ctest$c01)
 ```
-k=1 through k = 10 produce the same error rate: 5.94%. 
-k=25 has an error rate of 9.9%
-k=50 27.72% error rate
-k=150 24.75%
+1. k=1 through k = 10 produce the same error rate: 5.94%. 
+2. k=25 has an error rate of 9.9%
+3. k=50 27.72% error rate
+4. k=150 24.75%
 
 In this case, selecting only the most correlated variables with out outcome produces models with less error when k<25 vis-a-vis clustering using all provided variables.   
 
