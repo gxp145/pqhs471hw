@@ -1,0 +1,492 @@
+---
+title: "PQHS 471 Homework 1; Gregory Powers"
+output: word_document
+---
+#8a 
+loads data into r from a csv
+
+```{r}
+college <- read.csv('c:/sas/r/college.csv')
+```
+#8b
+```{r}
+fix(college)
+rownames(college) = college[,1]
+college = college[,-1]
+fix(college)
+```
+#8c
+```{r}
+summary(college)
+pairs(college [,1:10])
+plot(college$Outstate, college$Private)
+Elite = rep("No", nrow(college))
+Elite[college$Top10perc>50] = "Yes"
+Elite = as.factor(Elite)
+college = data.frame(college, Elite)
+summary(Elite)
+plot(college$Outstate, college$Elite)
+```
+#8d
+```{r}
+par(mfrow=c(2,2))
+hist(college$Accept)
+hist(college$P.Undergrad,breaks = 100,col = 1:3)
+hist(college$Room.Board, breaks = 50, col = 4:10)
+hist(college$Enroll, breaks = 10, col = 1)
+```
+#8f
+
+```{r}
+par(mfrow=c(1,1))
+plot(college$Accept, college$Grad.Rate)
+hist(college$Accept)
+hist(college$Grad.Rate)
+cor.test(college$Accept, college$Grad.Rate,  method = c("pearson"))
+colgrad <- lm(Grad.Rate ~ Accept, data = college)
+summary(colgrad)
+colgrad.res <- resid(colgrad)
+plot(college$Accept, colgrad.res, 
+     ylab="Residuals", xlab="Acceptance Rate", 
+     main="Graduation~Acceptance Rate") 
+abline(0, 0)                  
+```
+There is no statistically significant correlation between a college's acceptance rate and its rate of graduation. Though the model is not a great fit, examining the residuals gives no evidence of some higher order trend. 
+```{r}
+plot(college$PhD, college$Elite)
+hist(college$PhD)
+```
+There seems to be a relationship between elite status and having a PhD program. This is born out by the below t-test
+
+```{r}
+t.test(college$PhD~college$Elite)
+```
+Are elite colleges more expensive on average than non-elite schools? 
+```{r}
+plot(college$Expend, college$Elite)
+hist(college$Expend)
+```
+because the distribution appears skewed, the Expend variable will be log transformed. 
+```{r}
+logexpend <- log10(college$Expend)
+hist(logexpend)
+t.test(logexpend~college$Elite)
+```
+Elite colleges are, on average, more expensive than non-elite schools. 
+```{r}
+summary(lm(Grad.Rate ~ Expend + S.F.Ratio, data = college))
+```
+Higher tuition are associated with a higher graduation rate. This is no surprise. 
+
+```{r}
+cor.test(college$Expend, college$S.F.Ratio, method = c("pearson"))
+cor.test(college$Expend, college$Top10perc, method = c("pearson"))
+cor.test(college$Expend, college$Grad.Rate, method = c("pearson"))
+```
+More expensive tuition is moderately to strongly negatively correlated with S.F.Ratio and moderately to strongly positively correlated with Top10perc students. 
+
+The most expensive schools are the elite, and the elite get the most able students and have the most faculty. They also have helpful PhD students which attract the best faculty and can also teach and TA. 
+
+Going from the above summary statement, the college data set seems to have values that are out of range: "PhD" has a max value of 103%, Grad.Rate which is presumably also a proportion, has a max value of 118%. 
+
+#Chapter 3
+#9a
+```{r}
+library(ISLR)
+pairs(Auto)
+```
+#9b
+```{r}
+cor(subset(Auto, select=-name))
+```
+#9c
+```{r}
+auto.fit <- lm(mpg~.-name, data = Auto)
+summary(auto.fit)
+```
+1. There is a statistically significant association between MPG and displacement, weight, year, and origin. 
+2. Displacement, weight, year, and origin.
+3. Newer cars have higher MPG: average MPG improves by 0.7508 per year. 
+#9d
+```{r}
+par(mfrow=c(2,2))
+plot(auto.fit)
+```
+The residuals plot suggests several outliers, as does the QQ plot. The leverage plot identifies obs. 327, 394, and 14 as having high leverage. The residuals vs. fitted hints at a missing higher-order (quadratic) term. 
+
+#9e
+```{r}
+auto.fit2 <- lm(mpg~weight*displacement + displacement*year + acceleration*horsepower + acceleration*horsepower*origin, data = Auto)
+summary(auto.fit2)
+plot(auto.fit2)
+library(jtools)
+johnson_neyman(auto.fit2, pred = weight, modx = displacement, alpha = 0.01)
+johnson_neyman(auto.fit2, pred = displacement, modx = year, alpha = 0.01)
+sim_slopes(auto.fit2, pred = acceleration, modx = horsepower, mod2 = origin, jnplot = TRUE)
+probe_interaction(auto.fit2, pred = acceleration, modx = horsepower, mod2 = origin)
+interact_plot(auto.fit2, pred = "weight", modx = "displacement")
+interact_plot(auto.fit2, pred = "displacement", modx = "year")
+interact_plot(auto.fit2, pred = "acceleration", modx = "horsepower")
+```
+Weight by displacement, displacement by year, acceleration by horsepower, horsepower by origin and acceleration by horsepower by origin are statistically significant interactions. Normally I would not try to fit so many interaction terms or even three way interactions as they are very hard to interpret; however, I wanted to take this opportunity to learn more about R's interaction plots and Johnson-Neyman plots which may help to interpret said interactions. The latter are very hard to make in SAS. 
+
+#9f 
+```{r}
+auto.fit3 <- lm(mpg~log(weight)+sqrt(displacement)+I(horsepower^2), data = Auto)
+summary(auto.fit3)
+anova(auto.fit3, auto.fit)
+```
+The log weight of a car and the square root of its displacement have a statistically significant relationship with MPG. Horsepower^2 is not statistically associated with MPG. This model, however, does not seem to out perform the orginal in terms of variance explained (as determined by the smaller RSS)   
+
+#15
+
+Please forgive the clumsy approach to question 15. I am new to r. 
+
+```{r}
+library(MASS)
+library(dplyr)
+
+names(Boston)
+summary(Boston)
+glimpse(Boston)
+```
+
+```{r}
+lm.zn <- lm(crim~zn, data = Boston)
+summary(lm.zn)
+par(mfrow=c(2,2))
+plot(lm.zn)
+```
+zn is significantly associated with crime; however, zn accounts for only 4% of the variance in crim. The plots indicate the presence of outliers. 
+
+```{r}
+lm.indus <- lm(crim~indus, data = Boston)
+summary(lm.indus)
+par(mfrow=c(2,2))
+plot(lm.indus)
+```
+Indus is significant. Though it results in a better fit, there are still a number of outliers. 
+```{r}
+lm.chas <- lm(crim~chas, data = Boston)
+summary(lm.chas)
+par(mfrow=c(2,2))
+plot(lm.chas)
+```
+There is no evidence to support an statistically significant association between chas and crime. 
+```{r}
+lm.nox <- lm(crim~nox, data = Boston)
+summary(lm.nox)
+par(mfrow=c(2,2))
+plot(lm.nox)
+```
+nox is significantly associated with crime. As with the above, though this is the best fit yet (r2=.177), there still are a number of outliers. 
+```{r}
+lm.rm  <- lm(crim~rm, data = Boston)
+summary(lm.rm )
+par(mfrow=c(2,2))
+plot(lm.rm )
+```
+rm is significantly associated with crime, accounting for (only) 4.8% of the variance in crime. 
+```{r}
+lm.age  <- lm(crim~age, data = Boston)
+summary(lm.age)
+par(mfrow=c(2,2))
+plot(lm.age)
+```
+Age is significantly associated with crime. 
+```{r}
+lm.dis  <- lm(crim~dis, data = Boston)
+summary(lm.dis)
+par(mfrow=c(2,2))
+plot(lm.dis)
+```
+Dis is significantly associated with crime. 
+```{r}
+lm.rad  <- lm(crim~rad, data = Boston)
+summary(lm.rad)
+par(mfrow=c(2,2))
+plot(lm.rad)
+```
+Rad is significantly associated with crime. 
+```{r}
+lm.tax  <- lm(crim~tax, data = Boston)
+summary(lm.tax)
+par(mfrow=c(2,2))
+plot(lm.tax)
+```
+Rad is significantly associated with crime. 
+```{r}
+lm.ptratio  <- lm(crim~ptratio, data = Boston)
+summary(lm.ptratio)
+par(mfrow=c(2,2))
+plot(lm.ptratio)
+```
+ptratio is significantly associated with crime. 
+```{r}
+lm.black  <- lm(crim~black, data = Boston)
+summary(lm.black)
+par(mfrow=c(2,2))
+plot(lm.black)
+```
+Black is significantly associated with crime. 
+```{r}
+lm.lstat  <- lm(crim~lstat, data = Boston)
+summary(lm.lstat)
+par(mfrow=c(2,2))
+plot(lm.lstat)
+```
+lstat is significantly associated with crime.
+```{r}
+lm.medv <- lm(crim~medv, data = Boston)
+summary(lm.medv)
+par(mfrow=c(2,2))
+plot(lm.medv)
+```
+medv lstat is significantly associated with crime.
+
+In summation, using simple OLS, all IVs are significantly associated with crime excepting chas.
+
+#15b
+```{r}
+lm.full <- lm(crim~., data = Boston)
+summary(lm.full)
+par(mfrow=c(2,2))
+plot(lm.full)
+```
+The overall model is significant. We have sufficient evidence to reject the null hypothesis that the following coefficients are zero: zn, dis, rad, black and medv. 
+
+#15c
+```{r}
+names(lm.zn)
+summary(lm.zn$coefficients)
+lm.zn$coefficients[2]
+```
+Checking to see how r stores the data necessary for this question.
+
+```{r}
+simp.reg <- c(coef(lm.zn)[2],
+              coef(lm.indus)[2],
+              coef(lm.chas)[2],
+              coef(lm.nox)[2],
+              coef(lm.rm)[2],
+              coef(lm.age)[2],
+              coef(lm.dis)[2],
+              coef(lm.rad)[2],
+              coef(lm.tax)[2],
+              coef(lm.ptratio)[2],
+              coef(lm.black)[2],
+              coef(lm.lstat)[2],
+              coef(lm.medv)[2])
+m.reg = coef(lm.full)[2:14]
+plot(simp.reg, m.reg)
+c(simp.reg, m.reg)
+
+```
+Many of these values vary, which is to be expected: in the case of multiple regression, the coefficients are conditional. The largest deviation is the variable nox, which changes drastically from the simple to multiple model. 
+
+#15d
+
+```{r}
+summary(lm(crim~poly(zn, 3), data = Boston))
+summary(lm(crim~poly(indus, 3), data = Boston))
+summary(lm(crim~poly(nox, 3), data = Boston))
+summary(lm(crim~poly(rm, 3), data = Boston))
+summary(lm(crim~poly(dis, 3), data = Boston))
+summary(lm(crim~poly(rad, 3), data = Boston))
+summary(lm(crim~poly(tax, 3), data = Boston))
+summary(lm(crim~poly(ptratio, 3), data = Boston))
+summary(lm(crim~poly(black, 3), data = Boston))
+summary(lm(crim~poly(lstat, 3), data = Boston))
+summary(lm(crim~poly(medv, 3), data = Boston))
+```
+Results: 
+
+1. ZN: significant linear and quadratic association. 
+2. Indus: linear, quadratic and cubic.
+3. Nox: linear, quadratic and cubic.
+4. Rm: linear and quadratic.
+5. Dis: linear, quadratic and cubic.
+6. Rad: linear and quadratic.
+7. Tax: linear and quadratic.
+8. Ptratio: linear, quadratic and cubic.
+9. Black: linear only. 
+10. Lstat: linear and quadratic.
+11. Medv: linear, quadratic and cubic.
+
+#Chapter 4
+#13
+```{r}
+library(MASS)
+library(dplyr)
+library(Hmisc)
+library(corrplot)
+library(caret)
+summary(Boston)
+glimpse(Boston)
+```
+```{r, fig.width = 8, fig.height = 8} 
+c01 <- with(Boston, ifelse(crim > median(crim), 1, 0))
+crmdf <- data.frame(Boston, c01)
+summary(crmdf$c01)
+#The below function is taken from: https://rstudio-pubs-static.s3.amazonaws.com/240657_5157ff98e8204c358b2118fa69162e18.html . It formats the correlation table in an a more readble form.
+flat_cor_mat <- function(cor_r, cor_p){
+  library(tidyr)
+  library(tibble)
+  cor_r <- rownames_to_column(as.data.frame(cor_r), var = "row")
+  cor_r <- gather(cor_r, column, cor, -1)
+  cor_p <- rownames_to_column(as.data.frame(cor_p), var = "row")
+  cor_p <- gather(cor_p, column, p, -1)
+  cor_p_matrix <- left_join(cor_r, cor_p, by = c("row", "column"))
+  cor_p_matrix
+}
+
+cor.1 <- rcorr(as.matrix(crmdf))
+crm.cor.matrix <- flat_cor_mat(cor.1$r, cor.1$P)
+crm.cor.matrix
+cor.2 <- cor(crmdf)
+head(round(cor.2,2))
+corrplot(cor.2, type = "upper", order = "hclust", method = "number", p.mat = cor.1$P, sig.level = .01)
+```
+```{r}
+#Using dplyr to partition into 80/20
+set.seed(2468)
+ctrain <- sample_frac(crmdf, 0.8)
+dataid <-as.numeric(rownames(ctrain)) 
+ctest <- crmdf[-dataid,]
+```
+Logistic Regression Models:
+```{r}
+
+logfit.test <- glm(c01 ~ . - c01 - crim, data = ctrain, family = binomial)
+summary(logfit.test)
+logfit.prob <- predict(logfit.test, ctest, type="response") 
+logfit.pred <- rep(0, length(logfit.prob))
+logfit.pred[logfit.prob > .5] = 1
+table(logfit.pred, ctest$c01)
+mean(logfit.pred != ctest$c01)
+
+```
+This model gives us a 12.87% error rate. Lets try it with just the most correlated variables 
+```{r}
+#Logistic model 2
+logfit.test2 <- glm(c01 ~ rad + tax +  nox + indus + lstat + dis + zn, data = ctrain, family = binomial)
+summary(logfit.test2)$coef
+logfit.prob2 <- predict(logfit.test2, ctest, type="response") 
+logfit.pred2 <- rep(0, length(logfit.prob))
+logfit.pred2[logfit.prob2 > .5] = 1
+names(logfit.pred2)
+table(logfit.pred2, ctest$c01)
+mean(logfit.pred2 != ctest$c01)
+
+```
+The error of this model is 16.63%. Not an improvement.
+
+LDA Models:
+```{r}
+
+
+lda.fit <- with(ctrain, lda(c01 ~ . - c01 - crim, data = ctrain))
+names(lda.fit)
+lda.fit$prior
+lda.pred = predict(lda.fit, ctest)
+table(lda.pred$class, ctest$c01)
+mean(lda.pred$class != ctest$c01)
+plot(lda.fit, panel = lda.fit, cex = 0.7, dimen = 2,
+     abbrev = FALSE)
+
+```
+This model gives us an error rate of 12.87%
+```{r}
+lda.fit2 <- with(ctrain, lda(c01 ~ . - c01 - crim - tax - indus - zn - chas, data = ctrain))
+lda.fit2$prior
+lda.pred2 = predict(lda.fit2, ctest)
+table(lda.pred2$class, ctest$c01)
+mean(lda.pred2$class != ctest$c01)
+plot(lda.fit2, panel = lda.fit, cex = 0.7, dimen = 2,
+     abbrev = FALSE)
+
+```
+Removing tax, indus and zn improves the error rate to 10.89%
+```{r}
+lda.fit3 <- with(ctrain, lda(c01 ~ . - c01 - crim  - tax - indus - zn  - dis - chas - rm - black , data = ctrain))
+lda.fit3$prior
+lda.pred3 = predict(lda.fit3, ctest)
+table(lda.pred3$class, ctest$c01)
+mean(lda.pred3$class != ctest$c01)
+plot(lda.fit3, panel = lda.fit, cex = 0.7, dimen = 2,
+     abbrev = FALSE)
+
+```
+Further removing dis, chas, rm & black increases the error rate to 12.87%
+For fun, a QDA model
+```{r}
+library(klaR)
+qda.fit <- with(ctrain, qda(c01 ~ . - c01 - crim, data = ctrain))
+qda.fit$prior
+qda.fit <- predict(qda.fit, ctest)
+table(qda.fit$class, ctest$c01)
+mean(qda.fit$class != ctest$c01)
+ 
+```
+The same model fit as linear had an error rate of 12.87%; here the error rate is 11.88%.  
+
+KNN Models:
+```{r}
+
+library(class)
+set.seed(5654)
+train.x <- with(ctrain, cbind(zn, indus, chas, nox, rm, age, dis, rad, tax, ptratio, black, lstat, medv))
+test.x <- with(ctest, cbind(zn, indus, chas, nox, rm, age, dis, rad, tax, ptratio, black, lstat, medv)) 
+knn1 <- knn(train.x, test.x, ctrain$c01, k=1)
+mean(knn1 != ctest$c01)
+knn2 <- knn(train.x, test.x, ctrain$c01, k=5)
+mean(knn2 != ctest$c01)
+knn3 <- knn(train.x, test.x, ctrain$c01, k=10)
+mean(knn3 != ctest$c01)
+knn4 <- knn(train.x, test.x, ctrain$c01, k=25)
+mean(knn4 != ctest$c01)
+knn5 <- knn(train.x, test.x, ctrain$c01, k=50)
+mean(knn5 != ctest$c01)
+knn6 <- knn(train.x, test.x, ctrain$c01, k=150)
+mean(knn6 != ctest$c01)
+
+```
+Using all variables in the data set:
+
+1. k=1 produces a model with a 6.9% error rate
+2. k=5 produces a model with a 6.9% error rate
+3. k=10 produces a model with a 10.89% error rate
+4. k=25 produces a model with a 15.84% error rate
+5. k=50 produces a model with a 17.82% error rate
+6. k=150 produces a model with a 13.86% error rate
+
+```{r}
+#Here only the most strongly correlated variables with c01 are kept
+train.x2 <- with(ctrain, cbind(rad, tax, dis, nox, indus))
+test.x2 <- with(ctest, cbind(rad, tax, dis, nox, indus)) 
+
+knn21 <- knn(train.x2, test.x2, ctrain$c01, k=1)
+mean(knn21 != ctest$c01)
+knn22 <- knn(train.x2, test.x2, ctrain$c01, k=5)
+mean(knn22 != ctest$c01)
+knn23 <- knn(train.x2, test.x2, ctrain$c01, k=10)
+mean(knn23 != ctest$c01)
+knn24 <- knn(train.x2, test.x2, ctrain$c01, k=25)
+mean(knn24 != ctest$c01)
+knn25 <- knn(train.x2, test.x2, ctrain$c01, k=50)
+mean(knn25 != ctest$c01)
+knn26 <- knn(train.x2, test.x2, ctrain$c01, k=150)
+mean(knn26 != ctest$c01)
+```
+1. k=1 through k = 10 produce the same error rate: 5.94%. 
+2. k=25 has an error rate of 9.9%
+3. k=50 27.72% error rate
+4. k=150 24.75%
+
+In this case, selecting only the most correlated variables with out outcome produces models with less error when k<25 vis-a-vis clustering using all provided variables. 
+
+Overall, given the variables selected, KNN had the lowest error rate, followed by QDA, LDA and logistic regression. If the goal is prediction or classification KNN is the best performing option. Logistic regression-while not as accurate as the more flexible methods-does have the advantage of having the most interpretable parameter estimates, which may be of more importance than predictive performance depending on the goals of a given analysis.   
+
+
+
+
