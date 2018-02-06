@@ -281,7 +281,7 @@ simp.reg <- c(coef(lm.zn)[2],
               coef(lm.black)[2],
               coef(lm.lstat)[2],
               coef(lm.medv)[2])
-m.reg = coef(lm.full)[2:14]
+m.reg <- coef(lm.full)[2:14]
 plot(simp.reg, m.reg)
 c(simp.reg, m.reg)
 
