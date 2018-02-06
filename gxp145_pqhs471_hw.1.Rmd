@@ -60,7 +60,7 @@ There is no statistically significant association between a college's acceptance
 plot(college$PhD, college$Elite)
 hist(college$PhD)
 ```
-There seems to be a relationship between elite status and having a PhD program. This is born out by the below t-test
+There seems to be a relationship between elite status and having a PhD program. This is borne out by the below t-test, which gives sufficient evidence to reject the null hypothesis that the group means are equal: on average, 89% of elite schools have PhD programs, vs. ~71% non-elite. 
 
 ```{r}
 t.test(college$PhD~college$Elite)
@@ -76,11 +76,11 @@ logexpend <- log10(college$Expend)
 hist(logexpend)
 t.test(logexpend~college$Elite)
 ```
-Elite colleges are, on average, more expensive than non-elite schools. 
+Elite colleges are, on average, more expensive than non-elite schools.
 ```{r}
 summary(lm(Grad.Rate ~ Expend + S.F.Ratio, data = college))
 ```
-Higher tuition are associated with a higher graduation rate. This is no surprise. 
+Greater tuitions are associated with a higher graduation rate. 
 
 ```{r}
 cor.test(college$Expend, college$S.F.Ratio, method = c("pearson"))
@@ -246,7 +246,7 @@ summary(lm.medv)
 par(mfrow=c(2,2))
 plot(lm.medv)
 ```
-medv lstat is significantly associated with crime.
+medv is significantly associated with crime.
 
 In summation, using simple OLS, all IVs are significantly associated with crime excepting chas.
 
