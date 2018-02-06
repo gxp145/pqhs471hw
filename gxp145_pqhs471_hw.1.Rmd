@@ -42,20 +42,23 @@ hist(college$Enroll, breaks = 10, col = 1)
 #8f
 
 ```{r}
+
 par(mfrow=c(1,1))
-plot(college$Accept, college$Grad.Rate)
-hist(college$Accept)
-hist(college$Grad.Rate)
-cor.test(college$Accept, college$Grad.Rate,  method = c("pearson"))
-colgrad <- lm(Grad.Rate ~ Accept, data = college)
+Admit.Per <- college$Accept/college$Apps
+col1 <- data.frame(college, Admit.Per)
+plot(col1$Admit.Per, col1$Grad.Rate)
+hist(col1$Admit.Per)
+hist(col1$Grad.Rate)
+cor.test(col1$Admit.Per, col1$Grad.Rate,  method = c("pearson"))
+colgrad <- lm(Grad.Rate ~ Admit.Per, data = col1)
 summary(colgrad)
 colgrad.res <- resid(colgrad)
-plot(college$Accept, colgrad.res, 
+plot(col1$Admit.Per, colgrad.res, 
      ylab="Residuals", xlab="Acceptance Rate", 
      main="Graduation~Acceptance Rate") 
-abline(0, 0)                  
+abline(0, 0) 
 ```
-There is no statistically significant association between a college's acceptance rate and its rate of graduation.  Examining the residuals does not indicate some higher order trend. 
+There is a statistically significant negative association between a college's acceptance rate (admissions/applications) and its rate of graduation; acceptance rate accounts for 8.1% of the variation in graduation rate. As acceptance rates increase, graduation rates decrease. More selective schools choose only the most prepared applicants (see below).  
 ```{r}
 plot(college$PhD, college$Elite)
 hist(college$PhD)
@@ -78,20 +81,17 @@ t.test(logexpend~college$Elite)
 ```
 Elite colleges are, on average, more expensive than non-elite schools.
 ```{r}
-summary(lm(Grad.Rate ~ Expend + S.F.Ratio, data = college))
-```
-Greater tuitions are associated with a higher graduation rate. 
-
-```{r}
 cor.test(college$Expend, college$S.F.Ratio, method = c("pearson"))
 cor.test(college$Expend, college$Top10perc, method = c("pearson"))
 cor.test(college$Expend, college$Grad.Rate, method = c("pearson"))
+cor.test(col1$Expend, col1$Admit.Per, method = c("pearson"))
+summary(lm(Grad.Rate ~ Expend + S.F.Ratio + Admit.Per + PhD, data = col1))
 ```
-More expensive tuition is moderately to strongly negatively correlated with S.F.Ratio and moderately to strongly positively correlated with Top10perc students. 
+Expend, S.F. Ratio, PhD and Admit.Per are significantly associated with graduation rate. Holding other coefficients constant, Expend and PhD are positively associated; S.F. Ratio and Admit.Per negatively. This model accounts for about 21% of the variation in graduation rate. 
 
-The most expensive schools are the elite, and the elite get the most able students and have the most faculty. They also have helpful PhD students which attract the best faculty and can also teach and TA. 
+Schools classified as the elite are the most selective and expensive, and the elite get the most able students and have the best student to faculty ratios. They also have helpful PhD students which attract the best faculty and can also teach and TA. 
 
-Going from the above summary statement, the college data set seems to have values that are out of range: "PhD" has a max value of 103%, Grad.Rate which is presumably also a proportion, has a max value of 118%. 
+Going from the above summary statement, the college data set seems to have values that are out of range: "PhD" has a max value of 103%, Grad.Rate which is presumably also a proportion, has a max value of 118%.
 
 #Chapter 3
 #9a
@@ -332,21 +332,7 @@ glimpse(Boston)
 c01 <- with(Boston, ifelse(crim > median(crim), 1, 0))
 crmdf <- data.frame(Boston, c01)
 summary(crmdf$c01)
-#The below function is taken from: https://rstudio-pubs-static.s3.amazonaws.com/240657_5157ff98e8204c358b2118fa69162e18.html . It formats the correlation table in an a more readble form.
-flat_cor_mat <- function(cor_r, cor_p){
-  library(tidyr)
-  library(tibble)
-  cor_r <- rownames_to_column(as.data.frame(cor_r), var = "row")
-  cor_r <- gather(cor_r, column, cor, -1)
-  cor_p <- rownames_to_column(as.data.frame(cor_p), var = "row")
-  cor_p <- gather(cor_p, column, p, -1)
-  cor_p_matrix <- left_join(cor_r, cor_p, by = c("row", "column"))
-  cor_p_matrix
-}
-
 cor.1 <- rcorr(as.matrix(crmdf))
-crm.cor.matrix <- flat_cor_mat(cor.1$r, cor.1$P)
-crm.cor.matrix
 cor.2 <- cor(crmdf)
 head(round(cor.2,2))
 corrplot(cor.2, type = "upper", order = "hclust", method = "number", p.mat = cor.1$P, sig.level = .01)
@@ -370,7 +356,7 @@ table(logfit.pred, ctest$c01)
 mean(logfit.pred != ctest$c01)
 
 ```
-This model gives us a 12.87% error rate. Lets try it with just the most correlated variables 
+This model has a 12.87% test error rate. Lets try it with just the most correlated variables 
 ```{r}
 #Logistic model 2
 logfit.test2 <- glm(c01 ~ rad + tax +  nox + indus + lstat + dis + zn, data = ctrain, family = binomial)
@@ -383,7 +369,7 @@ table(logfit.pred2, ctest$c01)
 mean(logfit.pred2 != ctest$c01)
 
 ```
-The error of this model is 16.63%. Not an improvement.
+The test error of this model is 16.63%. Not an improvement.
 
 LDA Models:
 ```{r}
@@ -397,9 +383,8 @@ table(lda.pred$class, ctest$c01)
 mean(lda.pred$class != ctest$c01)
 plot(lda.fit, panel = lda.fit, cex = 0.7, dimen = 2,
      abbrev = FALSE)
-
 ```
-This model gives us an error rate of 12.87%
+This model gives us a test error rate of 12.87%
 ```{r}
 lda.fit2 <- with(ctrain, lda(c01 ~ . - c01 - crim - tax - indus - zn - chas, data = ctrain))
 lda.fit2$prior
@@ -408,9 +393,8 @@ table(lda.pred2$class, ctest$c01)
 mean(lda.pred2$class != ctest$c01)
 plot(lda.fit2, panel = lda.fit, cex = 0.7, dimen = 2,
      abbrev = FALSE)
-
 ```
-Removing tax, indus and zn improves the error rate to 10.89%
+Removing tax, indus and zn improves the test error rate to 10.89%
 ```{r}
 lda.fit3 <- with(ctrain, lda(c01 ~ . - c01 - crim  - tax - indus - zn  - dis - chas - rm - black , data = ctrain))
 lda.fit3$prior
@@ -419,9 +403,9 @@ table(lda.pred3$class, ctest$c01)
 mean(lda.pred3$class != ctest$c01)
 plot(lda.fit3, panel = lda.fit, cex = 0.7, dimen = 2,
      abbrev = FALSE)
-
 ```
-Further removing dis, chas, rm & black increases the error rate to 12.87%
+Further removing dis, chas, rm & black increases the test error rate to 12.87%
+
 For fun, a QDA model
 ```{r}
 library(klaR)
@@ -430,7 +414,6 @@ qda.fit$prior
 qda.fit <- predict(qda.fit, ctest)
 table(qda.fit$class, ctest$c01)
 mean(qda.fit$class != ctest$c01)
- 
 ```
 The same model fit as linear had an error rate of 12.87%; here the error rate is 11.88%.  
 
@@ -447,22 +430,27 @@ knn2 <- knn(train.x, test.x, ctrain$c01, k=5)
 mean(knn2 != ctest$c01)
 knn3 <- knn(train.x, test.x, ctrain$c01, k=10)
 mean(knn3 != ctest$c01)
-knn4 <- knn(train.x, test.x, ctrain$c01, k=25)
+knn4 <- knn(train.x, test.x, ctrain$c01, k=20)
 mean(knn4 != ctest$c01)
 knn5 <- knn(train.x, test.x, ctrain$c01, k=50)
 mean(knn5 != ctest$c01)
-knn6 <- knn(train.x, test.x, ctrain$c01, k=150)
+knn6 <- knn(train.x, test.x, ctrain$c01, k=75)
 mean(knn6 != ctest$c01)
-
+table(knn1, ctest$c01)
+table(knn2, ctest$c01)
+table(knn3, ctest$c01)
+table(knn4, ctest$c01)
+table(knn5, ctest$c01)
+table(knn6, ctest$c01)
 ```
 Using all variables in the data set:
 
-1. k=1 produces a model with a 6.9% error rate
-2. k=5 produces a model with a 6.9% error rate
-3. k=10 produces a model with a 10.89% error rate
-4. k=25 produces a model with a 15.84% error rate
-5. k=50 produces a model with a 17.82% error rate
-6. k=150 produces a model with a 13.86% error rate
+1. k=1 produces a model with a 6.9% test error rate
+2. k=5 produces a model with a 6.9% test error rate
+3. k=10 produces a model with a 10.89% test error rate
+4. k=20 produces a model with a 14.85% test error rate
+5. k=50 produces a model with a 17.82% test error rate
+6. k=150 produces a model with a 18.81.86% test error rate
 
 ```{r}
 #Here only the most strongly correlated variables with c01 are kept
@@ -475,21 +463,27 @@ knn22 <- knn(train.x2, test.x2, ctrain$c01, k=5)
 mean(knn22 != ctest$c01)
 knn23 <- knn(train.x2, test.x2, ctrain$c01, k=10)
 mean(knn23 != ctest$c01)
-knn24 <- knn(train.x2, test.x2, ctrain$c01, k=25)
+knn24 <- knn(train.x2, test.x2, ctrain$c01, k=20)
 mean(knn24 != ctest$c01)
 knn25 <- knn(train.x2, test.x2, ctrain$c01, k=50)
 mean(knn25 != ctest$c01)
-knn26 <- knn(train.x2, test.x2, ctrain$c01, k=150)
+knn26 <- knn(train.x2, test.x2, ctrain$c01, k=75)
 mean(knn26 != ctest$c01)
+table(knn21, ctest$c01)
+table(knn22, ctest$c01)
+table(knn23, ctest$c01)
+table(knn24, ctest$c01)
+table(knn25, ctest$c01)
+table(knn26, ctest$c01)
 ```
-1. k=1 through k = 10 produce the same error rate: 5.94%. 
-2. k=25 has an error rate of 9.9%
-3. k=50 27.72% error rate
-4. k=150 24.75%
+1. k=1 through k = 10 have the same test error rate: 5.94%. 
+2. k=20 has a test error rate of 9.9%
+3. k=50 has a 27.72% test error rate
+4. k=75 has a 25.74% test error rate
 
-In this case, selecting only the most correlated variables with out outcome produces models with less error when k<25 vis-a-vis clustering using all provided variables. 
+In this case, selecting only the most correlated variables with out outcome produces models with less error when k<20 vis-a-vis clustering using all provided variables. In general, the trend is that as the value of K increases, so does test error. 
 
-Overall, given the variables selected, KNN had the lowest error rate, followed by QDA, LDA and logistic regression. If the goal is prediction or classification KNN is the best performing option. Logistic regression-while not as accurate as the more flexible methods-does have the advantage of having the most interpretable parameter estimates, which may be of more importance than predictive performance depending on the goals of a given analysis.   
+Overall, given the variables selected, KNN had the lowest error rate, followed by QDA, LDA and logistic regression. If the goal classification, KNN is the best performing option given these data, methods and train/test specification. Logistic regression-while not as accurate as the more flexible methods-does have the advantage of having the most interpretable parameter estimates, which may be of more importance than predictive performance depending on the goals of a given analysis.   
 
 
 
