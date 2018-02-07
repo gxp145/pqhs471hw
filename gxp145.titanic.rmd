@@ -1,0 +1,166 @@
+---
+title: "Titanic"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lets take a look at the data:
+```{r}
+train <- read.csv('c:/sas/r/train.csv')
+test <- read.csv('c:/sas/r/test.csv')
+names(train)
+str(train)
+summary(train)
+```
+We have considerable missingness on the age variable. To look at the bigger picture:
+
+```{r}
+library(VIM)
+mice_plot <- aggr(train, col=c('navyblue','red'),
+                    numbers=TRUE, sortVars=TRUE,
+                    labels=names(train), cex.axis=.7)
+```
+It looks like my interpretation of the summary was correct. 
+
+Because I don't know how to do sophisticated imputation with r, I am going to use Hmisc and replace NA with the median. However, I would prefer to use a GLM or some sort of bootstrapped imputation. If and when I learn to do that, the below with be helpful in determining predictors. 
+
+Let's examine what is most strongly correlated with Survival and Age.
+
+```{r}
+library(vcd)
+train.num <- subset(train, select = c(Survived, Pclass, Age, SibSp, Parch, Fare))
+cor(train.num, use = "na.or.complete")
+sxf <- table(train$Survived, train$Sex)
+sxpc <- table(train$Survived, train$Pclass)
+summary(sxf)
+assocstats(sxf)
+summary(sxpc)
+assocstats(sxpc)
+
+```
+
+Pclass, Parch, and SibSp are the most strongly correlated with age. We can also see that Pclass, Parch, Fare and Sex (phi = 0.54) are the most correlated with survival.  
+
+Let's do a simple imputation.
+
+```{r}
+library(Hmisc)
+train$Age <- with(train, impute(Age, median))
+as.numeric(train$Age)
+summary(train$Age)
+```
+
+
+Below is my best attempt to visualize things
+```{r}
+library('dplyr')
+library('ggplot2')
+library('ggthemes')
+summary(train$Sex)
+summary(train$Fare)
+hist(train$Age)
+hist(train$Fare)
+plot(train$Fare, train$Sex)
+plot(train$Sex, train$Survived)
+plot(train$Fare, train$Survived)
+plot(train$SibSp, train$Survived)
+ggplot(train, aes(as.factor(Survived), fill=Sex)) + geom_bar()
+ggplot(train, aes(as.factor(Pclass), fill=Sex)) + geom_bar()
+ggplot(train, aes(Age, Fare)) + geom_line()
+ggplot(train, aes(Sex, Age)) + geom_boxplot()
+ggplot(train, aes(as.factor(Survived), Age)) + geom_boxplot()
+#the code for the below ggplots is a template taken from an r website. 
+(ggplot(train[1:891,], aes(x = SibSp, fill = factor(Survived))) +
+  geom_bar(stat='count', position='dodge') +
+  scale_x_continuous(breaks=c(1:11)) +
+  labs(x = 'Number of Siblings + Spouse'))
+(ggplot(train[1:891,], aes(x = Pclass, fill = factor(Survived))) +
+  geom_bar(stat='count', position='dodge') +
+  scale_x_continuous(breaks=c(1:11)) +
+  labs(x = 'Passenger Class'))
+(ggplot(train[1:891,], aes(x = Parch, fill = factor(Survived))) +
+  geom_bar(stat='count', position='dodge') +
+  scale_x_continuous(breaks=c(1:11)) +
+  labs(x = 'Parch'))
+
+```
+1st and 2nd class passengers fared much better than 3rd. Females disproportionately survived despite there being more males in 1st and 2nd class. there doesn't appear to be an age by gender difference. 
+
+Some things that stick out a bit: having one or two parents or children seems to improve chances of survival; same for siblings and spouse, however large families seem to get penalized. However, using the box plot things aren't so clear regarding age and survival. 
+
+```{r}
+t.test(train$Age~train$Survived)
+train$child <- 0
+train$child[train$Age < 8] <- 1
+test$child <- 0
+test$child[test$Age < 8] <- 1
+as.factor(test$child)
+as.factor(train$child)
+summary(train$child)
+cxs <- table(train$Survived, train$child)
+assocstats(cxs)
+summary(glm(Survived ~ child, data = train, family = binomial))
+exp(1.30219)
+
+```
+While there is no overall difference in survival by mean age, there is a small but significant association with being a young child (>8) and surviving; from the logistic model, young children are 3.68 times as likely to survive that those older. 
+
+
+Lets make a few more tables to quantify things
+```{r}
+table(train$Survived)
+table(train$Survived, train$Pclass)
+table(train$Embarked, train$Survived)
+prop.table(table(train$Pclass, train$Survived))
+prop.table(table(train$SibSp, train$Survived))
+with(train, aggregate(Survived ~ Pclass + Sex, data=train, FUN=sum))
+wilcox.test(train$Fare~train$Survived)
+logtest <- glm(train$Survived~train$Embarked, family = binomial)
+summary(logtest)
+```
+Unsurprisingly, the t-test validates the above graphics regarding fares: those who survived spent significantly more--because of the distribution, a non-parametric test was preferred.  Embarked does not seem statistically related to survival. 
+
+
+With what we know, lets fit a model. The sample is not very large and we have (what I consider) to be a number of predictors. I think this scenario favors a less flexible option given my current bag of tools. 
+```{r}
+library(caret)
+set.seed(56741)
+logfit.train1 <- glm(Survived ~ Sex + Fare + Age + child + Pclass + SibSp + Parch, data = train, family = binomial)
+summary(logfit.train1)
+predtrain <- predict(logfit.train1, type = 'response')
+predtrain <- ifelse(predtrain > 0.5,1,0)
+confusionMatrix(data=predtrain, reference=train$Survived)
+log.predictions = predict(logfit.train1, test, type = 'response')
+log.predictions <- ifelse(log.predictions > 0.5,1,0)
+log.predictions[is.na(log.predictions)] <- 0
+output <- data.frame(PassengerID = test$PassengerId, Survived = log.predictions)
+table(output$Survived)
+write.csv("C:/sas/r/TPred.csv" , x = output, row.names = FALSE)
+```
+
+Lets try LDA
+```{r}
+library(MASS)
+lda.tfit <- with(train, lda(Survived ~ Sex + Fare + Age + child + Pclass + SibSp + Parch, data = train))
+ldat <- table(predict(lda.tfit)$class, train$Survived)
+confusionMatrix(data=ldat, reference=train$Survived)
+```
+And QDA
+```{r}
+library(klaR)
+qda.fit <- with(train, qda(Survived ~ Sex + Fare + Age + child + Pclass + SibSp + Parch, data = train))
+qdadat <- table(predict(qda.fit)$class, train$Survived)
+confusionMatrix(data=qdadat, reference=train$Survived)
+```
+
+Of these three models, the logistic regression seems to be the best performer having a training error rate of just under 18%. 
+
+Examining what people have done online, two things jump out at me. First is that flexible models seem to be preferred (one example using Random Forest had a training error rate of 10%, though that of course doesn't guarantee the same test error rate), and that more time is spent on cleaning data and creating "proxy" variables. A number of submissions spent considerable time cleaning and recoding variables based on passenger title: what better indicator of class could their for a ship departing the United Kingdom in 1912? As my explorations indicate, wealth, proxy's thereof, sex and age are the most strongly associated indicators of survival. This is very creative and had I not looked at examples I would have never thought to do it. 
+
+That said, most examples spent very little time visualizing the data, examining its correlation structure, etc. Also surprisingly, rarely were statistical tests used to drive model building. Additionally, most worked on a combined data set, only splitting into train and test at the last moment. 
+
+My script is very clunky: I am still very new to r.  
+
