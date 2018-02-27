@@ -203,7 +203,7 @@ axis(1, at=1:5, lab=c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS'))
 kable(mod.effect, col.names = 'r2')%>%
   kable_styling()
 ```
-There is very little difference in RSS and all models account for the variation in applications quite well (r2 < .9). That said, PLS produces a model with the smallest test error and largest r2, though the absolute differences are tiny. That PCR is not considered: as no dimensions were reduced, it is equivalent to OLS. 
+There is very little difference in RSS and all models account for the variation in applications quite well (r2 < .9). OLS followed by PLS produce the models with the smallest test error and largest r2, though the absolute differences are tiny. That PCR is not considered: as no dimensions were reduced, it is equivalent to OLS. 
 
 #Chapter 6 Q11
 
