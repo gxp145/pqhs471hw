@@ -1,0 +1,311 @@
+---
+title: "PQHS471 HW 2"
+output: pdf_document
+author: Gregory Powers (gxp145)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, message=FALSE, warning = FALSE, error=FALSE)
+options(knitr.table.format = "latex")
+```
+
+#Chapter 5 Q9
+
+**(A)**
+```{r}
+library(MASS)
+library(Matrix)
+library(knitr)
+library(kableExtra)
+library(MVN)
+library(corrplot)
+attach(Boston)
+set.seed(1)
+medv.Mean <- mean(medv)
+medv.Mean
+```
+**(B)**
+As I am learning R, I'm going to do this a few ways.
+```{r}
+sum(medv > 0)
+length(medv)
+medv.Error <- sd(medv)/sqrt(506)
+medv.Error
+print(sd(medv)/sqrt(length(medv)))
+```
+**(C)**
+```{r}
+library(boot)
+mean.fn <- function (x ,id) {
+           return(mean(x[id]))
+}
+boot.M <- boot(medv, mean.fn, 1000)
+boot.M
+boot.SD <- sd(boot.M$t)/length(t)
+boot.SD - medv.Error
+```
+
+The difference between the bootstrapped estimate and the original is about 0.01. 
+
+**(D)**
+```{r}
+c(boot.M$t0 - 2 *sd(boot.M$t), boot.M$t0 + 2 *sd(boot.M$t))
+t.test(medv)
+```
+**(E)**
+```{r}
+medv.Median <- median(Boston$medv); medv.Median
+```
+**(F)**
+
+```{r}
+median.fn <- function (x ,id) {
+           return(median(x[id]))
+}
+
+boot.Median <- boot(medv, median.fn, 1000)
+boot.Median
+```
+The estimated SE of the median is 0.3801
+
+**(G)**
+```{r}
+print(medv.muTen <- quantile(medv, 0.1))
+```
+```{r}
+quantile.fn <- function (x ,id) {
+           return(quantile(x[id], 0.1))
+}
+
+boot.Quantile10 <- boot(medv, quantile.fn, 1000)
+boot.Quantile10
+```
+The estimated SE is 0.4826. 
+
+#Chapter 6 Q9
+
+**(A)**
+```{r}
+library(ISLR)
+detach(Boston)
+attach(College)
+```
+
+```{r, fig.width = 12, fig.height = 10, dpi = 125}
+library(dplyr)
+summary(College)
+str(College)
+anyDuplicated(College)
+sum(is.na(College))
+uniPlot(College[2:18], type = "histogram")
+```
+```{r, fig.width = 12, fig.height = 10, dpi = 125}
+r <- cor(College[2:18])
+title <- 'College Data'
+corrplot(r, method = "color", type = 'upper', diag = FALSE, addCoef.col = "black",
+            order = "hclust", title = title, mar=c(0,0,1,0))
+```
+
+
+Using dplyr to split into test and train. 
+```{r}
+col.train <- sample_frac(College, 0.8)
+col.test = setdiff(College, col.train)
+nrow(col.train) + nrow(col.test) == nrow(College)
+```
+
+**(B)**
+
+```{r}
+lm.Apps <- lm(Apps ~ ., data = col.train)
+summary(lm.Apps)
+par(mfrow=c(2,2))
+plot(lm.Apps)
+lm.pred <- predict(lm.Apps, col.test)
+lm.er <- mean((col.test[, 'Apps'] - lm.pred)^2) #doing it the book way once. Referencing cols by [] is still odd to me. 
+```
+
+Test RSS =  944829
+
+**(C)**
+```{r}
+library(glmnet)
+library(foreach)
+train.mat <- model.matrix(Apps ~ ., data = col.train) # Reminder to self: no missing [,-1]
+test.mat <- model.matrix(Apps ~ ., data = col.test) # [,-1]
+grid = 10^seq(10, -2, length = 100)
+ridge.cv <- cv.glmnet(train.mat, col.train$Apps, alpha = 0, lambda = grid, thresh = 1e-12) # can also refrence col name [, 'Apps']
+plot(ridge.cv)
+ridge.cv$lambda.min
+ridge.pred <- predict(ridge.cv, newx = test.mat, s = ridge.cv$lambda.min)
+ridge.er <- mean((col.test$Apps - ridge.pred)^2)
+```
+The RSS improves only slightly. 
+
+**(D)**
+```{r}
+lass.cv <- cv.glmnet(train.mat, col.train$Apps, alpha = 1, lambda = grid, thresh = 1e-12)
+plot(lass.cv)
+lass.pred <- predict(lass.cv, s = lass.cv$lambda.min, newx = test.mat)
+lass.er <- mean((col.test$Apps - lass.pred)^2)
+mod.lass = glmnet(model.matrix(Apps~., data=College), College$Apps, alpha=1)
+mod.lass.p <-predict(mod.lass, s=lass.cv$lambda.min, type="coefficients"); mod.lass.p
+```
+The test RSS is 2136982. There are 14 nonzero coefficient estimates, though some are quite small. 
+
+**(E)**
+
+```{r}
+library(pls)
+pcr.mod <- pcr(Apps ~ ., data = col.train, scale = TRUE, validation = "CV")
+validationplot(pcr.mod, val.type = 'MSEP')
+summary(pcr.mod)
+pcr.pred <- predict(pcr.mod, col.test, ncomp = 17)
+pcr.er <- mean((col.test$Apps - pcr.pred)^2)
+```
+M = 17 (no reduction in dimensions),  test RSS = 1969505
+
+```{r}
+pls.mod <- plsr(Apps ~ ., data = col.train, scale = TRUE, validation = "CV")
+summary(pls.mod)
+validationplot(pls.mod, val.type = 'MSEP')
+pls.pred <- predict(pls.mod, col.test, ncomp = 10)
+pls.er <- mean((col.test$Apps - pls.pred)^2)
+
+```
+Min CV is where M = 10. Test error RSS = 1996495
+
+```{r}
+mod.errors <- c(lm.er, ridge.er, lass.er, pcr.er, pls.er)
+names(mod.errors) <- c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')
+barplot(mod.errors, main = 'Test Error by Method', xlab = 'Method', ylab = 'RSS')
+
+plot(mod.errors, type = 'h', col='blue', xaxt='n') 
+axis(1, at=1:5, lab=c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS'))
+
+kable(mod.errors, col.names = 'RSS')%>%
+  kable_styling()
+
+#The idea to do the below came from an R forum
+t.avg <- mean(col.test$Apps)
+ols.r2 = 1 - mean((lm.pred - col.test$Apps)^2) / mean((t.avg - col.test$Apps)^2)
+ridge.r2 = 1 - mean((ridge.pred - col.test$Apps)^2) / mean((t.avg - col.test$Apps)^2)
+lass.r2 = 1 - mean((lass.pred - col.test$Apps)^2) / mean((t.avg - col.test$Apps)^2)
+pcr.r2 = 1 - mean((pcr.pred - col.test$Apps)^2) / mean((t.avg - col.test$Apps)^2)
+pls.r2 = 1 - mean((pls.pred - col.test$Apps)^2) / mean((t.avg - col.test$Apps)^2)
+
+mod.effect <- c(ols.r2, ridge.r2, lass.r2, pcr.r2, pls.r2)
+names(mod.effect) <- c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')
+
+plot(mod.effect, type = 'h', col='blue', xaxt='n') 
+axis(1, at=1:5, lab=c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')) 
+
+kable(mod.effect, col.names = 'r2')%>%
+  kable_styling()
+```
+There is very little difference in RSS and all models account for the variation in applications quite well (r2 < .9). That said, PLS produces a model with the smallest test error and largest r2, though the absolute differences are tiny. That PCR is not considered: as no dimensions were reduced, it is equivalent to OLS. 
+
+#Chapter 6 Q11
+
+**(A)**
+```{r, fig.width = 12, fig.height = 10, dpi = 125}
+#Splitting into test and train via dplyr. Making test Mats for Ridge & Lasso 
+set.seed(16565)
+detach(College)
+attach(Boston)
+bos.train <- sample_frac(Boston, 0.8)
+bos.test = setdiff(Boston, bos.train)
+nrow(bos.train) + nrow(bos.test) == nrow(Boston)
+rownames(bos.train) <- c()
+rownames(bos.test) <- c()
+mat.train <- model.matrix(crim ~ . , data = bos.train)[,-1]
+mat.test <- model.matrix(crim ~ ., data=bos.test)[,-1]
+summary(Boston)
+str(Boston)
+anyDuplicated(Boston)
+sum(is.na(Boston))
+uniPlot(Boston, type = "histogram")
+```
+
+```{r, fig.width = 12, fig.height = 10, dpi = 125}
+r <- cor(Boston)
+title <- 'Boston Data'
+corrplot::corrplot(r, method = "color", type = 'upper', diag = FALSE, addCoef.col = "black",
+            order = "hclust", title = title, mar=c(0,0,1,0))
+```
+
+
+```{r}
+lm.fit <- lm(crim ~ ., data = bos.train) 
+par(mfrow=c(2,2))
+plot(lm.fit)
+lm.pred <- predict(lm.fit, bos.test)
+lm.er <- mean((bos.test$crim - lm.pred)^2); lm.er 
+```
+
+
+```{r}
+grid = 10^seq(10, -2, length = 100)
+ridge.fit <- cv.glmnet(mat.train, bos.train$crim, alpha = 0, lambda = grid, thresh = 1e-12) 
+plot(ridge.fit)
+ridge.fit$lambda.min
+ridge.pred <- predict(ridge.fit, newx = mat.test, s = ridge.fit$lambda.min)
+ridge.er <- mean((bos.test$crim - ridge.pred)^2); ridge.er
+predict(ridge.fit, s = ridge.fit$lambda.min, type = "coefficients")
+```
+
+```{r}
+lass.fit = cv.glmnet(mat.train, bos.train$crim, alpha = 1, lambda = grid, thresh = 1e-12)
+plot(lass.fit)
+lass.pred = predict(lass.fit, s = lass.fit$lambda.min, newx = mat.test)
+lass.er = mean((bos.test$crim - lass.pred)^2)
+predict(lass.fit, s = lass.fit$lambda.min, type = "coefficients")
+```
+
+```{r}
+library(pls)
+pcr.fit <- pcr(crim ~ ., data = bos.train, scale = TRUE, validation = "CV")
+validationplot(pcr.mod, val.type = 'MSEP')
+summary(pcr.mod)
+pcr.pred <- predict(pcr.fit, bos.test, ncomp = 10)
+pcr.er <- mean((bos.test$crim - pcr.pred)^2); pcr.er
+```
+```{r}
+pls.fit <- plsr(crim ~ ., data = bos.train, scale = TRUE, validation = "CV")
+summary(pls.fit)
+validationplot(pls.fit, val.type = 'MSEP')
+pls.pred <- predict(pls.fit, bos.test, ncomp = 9)
+pls.er <- mean((bos.test$crim - pls.pred)^2); pls.er
+```
+**(B)**
+```{r}
+mod.errors <- c(lm.er, ridge.er, lass.er, pcr.er, pls.er)
+names(mod.errors) <- c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')
+barplot(mod.errors, main = 'Test Error by Method', xlab = 'Method', ylab = 'RSS')
+plot(mod.errors, type = 'h', col='blue', xaxt='n') 
+axis(1, at=1:5, lab=c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS'))
+kable(mod.errors, col.names = 'RSS')%>%
+  kable_styling()
+
+#Again, calculating all the r2 in this manner was inspired by a forum post
+t.avg <- mean(bos.test$crim)
+ols.r2 = 1 - mean((lm.pred - bos.test$crim)^2) / mean((t.avg - bos.test$crim)^2)
+ridge.r2 = 1 - mean((ridge.pred - bos.test$crim)^2) / mean((t.avg - bos.test$crim)^2)
+lass.r2 = 1 - mean((lass.pred - bos.test$crim)^2) / mean((t.avg - bos.test$crim)^2)
+pcr.r2 = 1 - mean((pcr.pred - bos.test$crim)^2) / mean((t.avg - bos.test$crim)^2)
+pls.r2 = 1 - mean((pls.pred - bos.test$crim)^2) / mean((t.avg - bos.test$crim)^2)
+
+mod.effect <- c(ols.r2, ridge.r2, lass.r2, pcr.r2, pls.r2)
+names(mod.effect) <- c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')
+plot(mod.effect, type = 'h', col='blue', xaxt='n') 
+axis(1, at=1:5, lab=c('OLS', 'Ridge', 'Lasso', 'PCR', 'PLS')) 
+kable(mod.effect, col.names = 'r2')%>%
+  kable_styling()
+```
+
+OLS was used as a basis for comparison. All of the models perform fairly similarly, save PCR which stood out as the worst model (i.e. largest test error, lowest r2). PLS had the smallest test error, though not smaller than OLS which had marginally better test error and r2. Of the methods from chapter 6 (excepting step wise and subset selection), the PLS regression model performs the best, accounting for 39% of the variation in test set crime. 
+ 
+**(C)**
+
+The PLS model that performed best predicting Boston's crime fit 9 linear combinations of variables; while this reduced dimensions, it nonetheless utilized much of the information available. Thus, I would not remove any features. 
+
