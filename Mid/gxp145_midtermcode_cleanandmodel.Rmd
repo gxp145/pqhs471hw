@@ -1,0 +1,215 @@
+---
+title: "Untitled"
+author: "Gregory Powers"
+date: "March 9, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(forcats)
+library(broom)
+library(MASS)
+library(DescTools)
+library(psych)
+library(Amelia)
+library(survey)
+library(popbio)
+library(VIM)
+library(mice)
+library(caret)
+library(pscl)
+library(lmtest)
+library(polycor)
+library(glmnet)
+library(foreach)
+library(parallel)
+library(doParallel)
+mt.train <- fread('https://raw.githubusercontent.com/cxl791/PQHS471/master/census_train.csv', na.strings = '?')
+mt.test <- fread('https://raw.githubusercontent.com/cxl791/PQHS471/master/census_test.csv', na.strings = '?')
+#mt.train <- fread('https://raw.githubusercontent.com/cxl791/PQHS471/master/census_train.csv')
+#mt.test <- fread('https://raw.githubusercontent.com/cxl791/PQHS471/master/census_test.csv')
+sum(is.na(mt.train))
+sum(complete.cases(mt.train))
+sapply(mt.train, class)
+summary(mt.train, maxsum = 100)
+write.csv(mt.train, file = "c:/sas/r/mttrain.csv")
+mt.train <- mt.train %>% mutate_if(is.character, as.factor)
+prop.table(table(mt.train$income))
+mt.train$fnlwgt <- NULL
+mt.train <-na.omit(mt.train)
+```
+
+```{r}
+mt.train$income <- factor(mt.train$income, levels = c('<=50K', '>50K'), ordered = TRUE)
+mt.train$`native-country` <- as.factor(mt.train$`native-country`)
+mt.train$`native-country` <- fct_collapse(mt.train$`native-country`,
+  sa.viet = c("Columbia","Dominican-Republic","El-Salvador","Guatemala","Haiti", "Jamaica",
+              "Mexico","Peru", "Puerto-Rico", "Vietnam"),
+      US = c('United-States'),
+      india = c('India')
+)
+mt.train$`native-country` <- fct_lump(mt.train$`native-country`, n = 2)
+mt.train$education <- fct_collapse(mt.train$education,
+  lths = c("9th","10th","11th","12th","1st-4th", "5th-6th",
+           "7th-8th","Preschool", "Some-college"),
+  assoc = c("Assoc-acdm", "Assoc-voc"),
+  gtcol = c("Masters","Prof-school","Doctorate")
+)
+mt.train$education <- factor(mt.train$education, levels = c("lths", "HS-grad", "Some-college", "assoc", "Bachelors","gtcol"), ordered = TRUE)
+mt.train$workclass <- fct_collapse(mt.train$workclass,
+  sandlgov = c("Local-gov", "State-gov"),
+  self = c('Self-emp-inc', 'Self-emp-not-inc', 'Without-pay', 'Never-worked')
+)
+mt.train$occupation <- fct_collapse(mt.train$occupation,
+ service  = c('Protective-serv', 'Armed-Forces', 'Tech-support',              'Priv-house-serv', 'Other-service', 'Adm-clerical', 'Sales'),  
+ whitecol = c('Exec-managerial', 'Prof-specialty'),
+ bluecol = c('Farming-fishing', 'Machine-op-inspct', 'Craft-repair', 'Handlers-cleaners', 'Transport-moving' )
+ 
+)
+mt.train$`marital-status` <- fct_collapse(mt.train$`marital-status`,
+   married  = c('Married-AF-spouse', 'Married-civ-spouse'),  
+  notmarried = c('Married-spouse-absent', 'Separated', 'Divorced', 'Widowed')
+)
+
+mt.train$`capital-gain` <- ordered(cut(mt.train$`capital-gain`, c(-Inf, 0, 
+            median(mt.train[["capital-gain"]][mt.train[["capital-gain"]] >0]), 
+            Inf)),labels = c("None", "Low", "High"))
+mt.train$`capital-loss` <- ordered(cut(mt.train$`capital-loss`, c(-Inf, 0, 
+            median(mt.train[["capital-loss"]][mt.train[["capital-loss"]] >0]), 
+            Inf)), labels = c("None", "Low", "High"))
+```
+
+```{r}
+mt.train$education <- NULL
+mt.train.ren <- mt.train
+colnames(mt.train.ren)[colnames(mt.train.ren)=='education-num'] <- 'eduyrs'
+colnames(mt.train.ren)[colnames(mt.train.ren)=='marital-status'] <- 'mstatus'
+colnames(mt.train.ren)[colnames(mt.train.ren)=='capital-gain'] <- 'capgain'
+colnames(mt.train.ren)[colnames(mt.train.ren)=='capital-loss'] <- 'caploss'
+colnames(mt.train.ren)[colnames(mt.train.ren)=='hours-per-week'] <- 'hoursperweek'
+colnames(mt.train.ren)[colnames(mt.train.ren)=='native-country'] <- 'nativecountry'
+```
+
+```{r}
+mt.test <- mt.test %>% mutate_if(is.character, as.factor)
+mt.test$fnlwgt <- NULL
+
+mt.test <-na.omit(mt.test)
+mt.test$income <- factor(mt.test$income, levels = c('<=50K', '>50K'), ordered = TRUE)
+mt.test$`native-country` <- as.factor(mt.test$`native-country`)
+mt.test$`native-country` <- fct_collapse(mt.test$`native-country`,
+  sa.viet = c("Columbia","Dominican-Republic","El-Salvador","Guatemala","Haiti", "Jamaica",
+              "Mexico","Peru", "Puerto-Rico", "Vietnam"),
+      US = c('United-States'),
+      india = c('India')
+)
+mt.test$`native-country` <- fct_lump(mt.test$`native-country`, n = 2)
+mt.test$education <- fct_collapse(mt.test$education,
+  lths = c("9th","10th","11th","12th","1st-4th", "5th-6th",
+           "7th-8th","Preschool", "Some-college"),
+  assoc = c("Assoc-acdm", "Assoc-voc"),
+  gtcol = c("Masters","Prof-school","Doctorate")
+)
+mt.test$education <- factor(mt.test$education, levels = c("lths", "HS-grad", "Some-college", "assoc", "Bachelors","gtcol"), ordered = TRUE)
+mt.test$workclass <- fct_collapse(mt.test$workclass,
+  sandlgov = c("Local-gov", "State-gov"),
+  self = c('Self-emp-inc', 'Self-emp-not-inc', 'Without-pay', 'Never-worked')
+)
+mt.test$occupation <- fct_collapse(mt.test$occupation,
+ service  = c('Protective-serv', 'Armed-Forces', 'Tech-support',              'Priv-house-serv', 'Other-service', 'Adm-clerical', 'Sales'),  
+ whitecol = c('Exec-managerial', 'Prof-specialty'),
+ bluecol = c('Farming-fishing', 'Machine-op-inspct', 'Craft-repair', 'Handlers-cleaners', 'Transport-moving' )
+ 
+)
+mt.test$`marital-status` <- fct_collapse(mt.test$`marital-status`,
+   married  = c('Married-AF-spouse', 'Married-civ-spouse'),  
+  notmarried = c('Married-spouse-absent', 'Separated', 'Divorced', 'Widowed')
+)
+
+mt.test$`capital-gain` <- ordered(cut(mt.test$`capital-gain`, c(-Inf, 0, 
+            median(mt.test[["capital-gain"]][mt.test[["capital-gain"]] >0]), 
+            Inf)),labels = c("None", "Low", "High"))
+mt.test$`capital-loss` <- ordered(cut(mt.test$`capital-loss`, c(-Inf, 0, 
+            median(mt.test[["capital-loss"]][mt.test[["capital-loss"]] >0]), 
+            Inf)), labels = c("None", "Low", "High"))
+
+
+colnames(mt.test)[colnames(mt.test)=='education-num'] <- 'eduyrs'
+colnames(mt.test)[colnames(mt.test)=='marital-status'] <- 'mstatus'
+colnames(mt.test)[colnames(mt.test)=='capital-gain'] <- 'capgain'
+colnames(mt.test)[colnames(mt.test)=='capital-loss'] <- 'caploss'
+colnames(mt.test)[colnames(mt.test)=='hours-per-week'] <- 'hoursperweek'
+colnames(mt.test)[colnames(mt.test)=='native-country'] <- 'nativecountry'
+mt.test$education <- NULL
+```
+
+```{r}
+glm.test <- glm(income ~., data = mt.train, family=binomial(link='logit'))
+predtrain <- predict(glm.test, type = 'response')
+predtrain <- ifelse(predtrain > 0.5,1,0)
+library(ROSE)
+roc.curve(mt.train$income, predtrain, 
+          main="ROC curve")
+confusionMatrix(predtrain, reference=(as.numeric(mt.train$income)-1))
+summary(glm.test)
+round(exp(coef(glm.test)), digits = 4)
+varImp(glm.test, scale = FALSE)
+VIF(glm.test)
+```
+
+
+```{r}
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
+train_control <- trainControl(method="cv", number=10, allowParallel = TRUE)
+grid <- expand.grid(n.trees=c(10,20,50,100,500,1000),shrinkage=c(0.01,0.05,0.1,0.5),n.minobsinnode = c(3,5,10),interaction.depth=c(1,5,10))
+model.glm <- train(income~ ., data=mt.train.ren, trControl=train_control, method="glm", family=binomial(), na.action = na.omit); model.glm
+#model.glm2 <- train(income ~ . -caploss -relationship, data=mt.train.ren, trControl=train_control, method="glm", family=binomial(), na.action = na.omit); model.glm
+model.gbm = train(income ~ ., trControl = train_control , method = "gbm", data = mt.train.ren, verbose = FALSE, distribution = "bernoulli", tuneLength=5); model.gbm
+model.gbm2 = train(income ~ . -caploss -relationship, trControl = train_control , method = "gbm", data = mt.train.ren, verbose = FALSE, distribution = "bernoulli", tuneLength=5);
+model.gbm3 = train(income ~ hoursperweek + mstatus + eduyrs + capgain + occupation + sex, trControl = train_control , method = "gbm", data = mt.train.ren, verbose = FALSE, distribution = "bernoulli", tuneLength=5);
+model.qda <- train(income~ ., data=mt.train.ren, trControl=train_control, method="qda", na.action = na.omit); model.qda
+model.lda <- train(income~ ., data=mt.train.ren, trControl=train_control, method="lda", na.action = na.omit); model.qda
+model.for <- train(income~., data=mt.train.ren, method="rf", trControl=train_control); model.for
+rand.for <- randomForest(income ~ ., data = mt.train.ren, ntree=1000, ntry = 2, importance=TRUE)
+stopCluster(cluster)
+registerDoSEQ()
+varImpPlot(rand.for)
+```
+
+```{r}
+varImp(model.glm, scale = FALSE)
+varImp(model.gbm2)
+plot(varImp(object=model.gbm),main="GBM - Variable Importance")
+plot(varImp(object=model.glm),main="GLM - Variable Importance")
+plot(model.gbm)
+plot(varImp(object=model.gbm2),main="GBM2 Var Importance")
+plot(model.gbm)
+model.glm
+model.glm2
+model.qda
+model.for
+rand.for
+model.lda
+```
+
+```{r}
+predict.gbm <- predict.train (object=model.gbm, mt.test, type="raw")
+predict.glm <- predict.train (object=model.glm, mt.test, type="raw")
+predict.qda <- predict.train (object=model.qda, mt.test, type="raw")
+predict.lda <- predict.train (object=model.lda, mt.test, type="raw")
+confusionMatrix(predict.gbm, mt.test$income)
+confusionMatrix(predict.glm, mt.test$income)
+confusionMatrix(predict.qda, mt.test$income)
+confusionMatrix(predict.lda, mt.test$income)
+```
+
