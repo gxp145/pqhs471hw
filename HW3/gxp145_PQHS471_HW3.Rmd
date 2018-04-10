@@ -1,0 +1,391 @@
+---
+title: "PQHS 471 HW 3"
+author: "Gregory Powers"
+date: "March 18, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Chapter 7.9
+**(a)**
+
+```{r}
+library(ISLR)
+library(MASS)
+library(ggplot2)
+```
+
+```{r}
+lm.1 <- lm(nox~poly(dis, 3), data = Boston)
+summary(lm.1)
+dis.lim <- range(Boston$dis)
+dis.grid <- seq(from = dis.lim[1], to = dis.lim[2], by = .1)
+pred <- predict(lm.1, newdata = list(dis=dis.grid), se = TRUE)
+se.bands <- cbind(pred$fit + 2*pred$se.fit, pred$fit - 2*pred$se.fit)
+plot(Boston$nox~Boston$dis, xlim = dis.lim, cex = 1, col = "darkgrey")
+title("Nox~Dis Cubic Fit")
+lines(dis.grid, pred$fit, lwd = 2, col = "red")
+matlines(dis.grid, se.bands, lwd = 1, col = "blue", lty = 3)
+```
+The cubic fit of nox~dis is good: all terms are significant and together account for 71% of the variance in nox. However, we can see from the plot that while the function fits well throughout most of the range of dis, the confidence bands grows larger as dis approaches 12, suggesting the presence of outliers. 
+
+**(b)**
+
+```{r}
+rss = rep(0, 10)
+for (i in 1:10) {
+    lm.fit <- lm(nox ~ poly(dis, i), data = Boston)
+    rss[i] <- sum(lm.fit$residuals^2)
+}
+rss
+plot(rss, type = "b", xlab = "Degree", lwd = 2)
+
+```
+
+```{r}
+library(boot)
+set.seed(1)
+poly.cv <- rep(0, 10)
+for (i in 1:10) {
+    glm.fit <- glm(nox ~ poly(dis, i), data = Boston)
+    poly.cv[i] <- cv.glm(Boston, glm.fit, K = 10)$delta[1] #  note to self: [1] = standard, [2] = bias-corrected
+}
+
+plot(poly.cv, type = "b", lwd = 2, ylab = "MSE", xlab = "Poly Degree"); poly.cv
+```
+Judging from the graph and the poly.cv output, a 4th degree polynomial fit minimizes training error, albeit by a tiny margin over a 3rd degree fit. 
+
+
+```{r}
+library(splines)
+#length(nox)
+fit.sp <- lm(nox~bs(dis, df = 4, knots = c(2,3,5)), data = Boston)
+summary(fit.sp)
+pred.sp <- predict(fit.sp, newdata = list(dis=dis.grid), se = TRUE)
+se.bands.sp <- cbind(pred.sp$fit + 2*pred.sp$se.fit, pred.sp$fit - 2*pred.sp$se.fit)
+plot(Boston$nox~Boston$dis, cex = 1, col = "darkgrey")
+title("Nox~Dis 4 DF Spline")
+lines(dis.grid, pred.sp$fit, lwd = 2, col = "red")
+matlines(dis.grid, se.bands.sp, lwd = 1, col = "blue", lty = 3)
+```
+Knots were selected by summary statistics: the first, second and third quantiles. 
+
+**(e)**
+
+```{r}
+rss.sp <- rep(NA, 18)
+for (i in 3:18) {
+    fit.sp.rss <- lm(nox~bs(dis, df = i), data = Boston)
+    rss.sp[i] <- sum(fit.sp.rss$residuals^2)
+}
+rss.sp <- rss.sp[-c(1,2)]; rss.sp
+x <- c(3:18)
+plot(3:18, rss.sp, type = "b", ylab = "RSS", xlab = "# DF", xaxt='n')
+axis(1, at = x)
+```
+
+Error decreases more or less as flexibility increases, though not monotonically. There is a small increase DF 8 - DF 9, and again 10-11. 
+
+**(f)**
+
+```{r, warning=FALSE}
+set.seed(1)
+bs.cv <- rep(NA, 18)
+for (i in 3:18) {
+    bs.fit <- glm(nox ~ bs(dis, df = i), data = Boston)
+    bs.cv[i] <- cv.glm(Boston, bs.fit, K = 10)$delta[1] #  note to self: [1] = standard, [2] = bias-corrected
+}
+bs.cv <- bs.cv[-c(1,2)]; bs.cv
+plot(bs.cv, type = "b", lwd = 2, ylab = "Error", xlab = "Spline DF", xaxt='n')
+x <- c(1:18)
+axis(1, at = x)
+```
+
+The minimum CV error is where DF = 10, though this varies depending on the RNG and may not be true if the set seed value is something other than 1. cv.glm issues a number of warnings which are suppressed for a more tidy output. 
+
+#Chapter 8.9
+
+**(a)**
+```{r}
+summary(OJ)
+str(OJ)
+anyDuplicated(OJ)
+sum(is.na(OJ))
+```
+
+```{r}
+set.seed(1)
+train <- sample(1:nrow(OJ), 800)
+oj.train <- OJ[train,]
+oj.test <- OJ[-train,]
+```
+
+**(b)**
+```{r}
+library(tree)
+tree.fit <- tree(Purchase~., data = oj.train)
+summary(tree.fit)
+```
+
+The tree has 8 nodes and a training error rate of 0.165
+
+**(c)**
+```{r}
+tree.fit
+```
+
+20 is a terminal node that predicts MM. The split criterion is SpecialCH < .5. The branch has 70 observations with a deviance of 60.89. About 16% of the branch has Sales = CH, 84% Sales =  MM. 
+
+**(d)**
+
+```{r}
+plot(tree.fit)
+text(tree.fit)
+```
+
+LoyalCH appears to be the most important predictor of Purchase. 
+
+**(e)**
+
+```{r}
+
+tree.pred <- predict(tree.fit, oj.test, type = "class")
+table(tree.pred, oj.test$Purchase)
+1-(209)/270
+```
+Our test error rate is about 23%. 
+
+**(f)**
+
+```{r}
+cv.oj <- cv.tree(tree.fit, FUN = prune.misclass); cv.oj
+```
+
+**(g)**
+
+```{r}
+plot(cv.oj$size, cv.oj$dev, type = "b", lwd = 2, ylab = "Error", xlab = "Tree Size")
+```
+**(h)**
+A tree size of 5 is associated with the lowest error rate. 
+
+
+**(i)**
+```{r}
+prune.fit <- prune.misclass(tree.fit, best = 5)
+plot(prune.fit)
+text(prune.fit)
+```
+
+**(j)**
+
+```{r}
+summary(tree.fit)
+summary(prune.fit)
+```
+The train error rates are identical. 
+
+**(k)**
+
+```{r}
+prune.pred <- predict(prune.fit, oj.test, type = "class")
+table(prune.pred, oj.test$Purchase)
+1-(209)/270
+```
+
+The test error rate of the pruned and unpruned models are identical. 
+
+#9.1.6 Khan Data
+```{r}
+summary(Khan)
+str(Khan)
+anyDuplicated(Khan)
+sum(is.na(Khan))
+```
+
+```{r}
+table(Khan$ytrain)
+khan.train <- data.frame(x = Khan$xtrain, y = as.factor(Khan$ytrain))
+dim(khan.train)
+khan.test <- data.frame(x = Khan$xtest, y = as.factor(Khan$ytest))
+dim(khan.test)
+```
+
+
+```{r}
+library(parallel)
+library(doParallel)
+library(caret)
+set.seed(1)
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
+tunegrid <- expand.grid(.mtry=c(1:10))
+train.control <- trainControl(method="cv", number=10, search = "grid",  allowParallel = TRUE)
+model.for <- train(y~., data=khan.train, method="rf", tuneLength = 15, truneGrid = tunegrid, trControl=train.control, ntree=1500); 
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+```{r}
+print(model.for)
+plot(model.for)
+summary(model.for)
+predict.for <- predict.train(object=model.for, khan.test, type="raw")
+confusionMatrix(predict.for, khan.test$y)
+varImp(model.for)
+```
+
+```{r}
+cluster <- makeCluster(detectCores() - 1) 
+registerDoParallel(cluster)
+set.seed(1)
+grid.xg = expand.grid(
+  nrounds = 10, 
+  max_depth = c(3, 6,10), 
+  eta = c(0.1, 0.01), 
+  gamma = c(0,1,2), 
+  colsample_bytree = c(0.4, 0.7, 1.0), 
+  min_child_weight = c(1, 1.5, 2),
+  subsample = .5
+)
+#train.control <- trainControl(method="cv", number=5,  allowParallel = TRUE)
+model.gbm = train(y ~., method = "xgbTree", tuneGrid = grid.xg, data = khan.train, verbose = FALSE);
+stopCluster(cluster)
+registerDoSEQ()
+```
+
+```{r}
+plot(model.gbm)
+predict.xgb <- predict.train(object=model.gbm, khan.test, type="raw")
+print(head(predict.xgb))
+confusionMatrix(predict.xgb, khan.test$y)
+#varImp(model.gbm)
+```
+Both models perform well, having test error rates of 5%.  That said, the CI is smaller for the random forest model. 
+
+The random forest model a very wide search grid for mtry and resulted in a 5% error rate. This model was far harder to tune because with CV it takes much longer than XGB. 
+
+
+#Chapter 9.8
+
+**(a)**
+```{r}
+set.seed(11)
+train <- sample(1:nrow(OJ), 800)
+oj.train <- OJ[train,]
+oj.test <- OJ[-train,]
+```
+
+**(b)**
+
+```{r}
+library(e1071)
+svm.lin <- svm(Purchase ~ ., data = oj.train, kernel = "linear", cost = 0.01)
+summary(svm.lin)
+```
+There were 429 support vectors, 216 for the class CH and 213 for the class MM. 
+
+**(c)**
+
+```{r}
+svm.lin.pred <- predict(svm.lin, oj.train)
+confusionMatrix(svm.lin.pred, oj.train$Purchase)
+1-.8425
+svm.lin.pred1 <- predict(svm.lin, oj.test)
+confusionMatrix(svm.lin.pred1, oj.test$Purchase)
+1-.8111
+```
+
+The training error rate is 15.75% and the test error rate is 18.89%. 
+
+**(d)**
+```{r}
+set.seed(1)
+tune.svm <- tune(svm, Purchase~., data = oj.train, kernel = "linear", ranges = list(cost = seq(.01, 10, by = .2))) 
+summary(tune.svm)
+```
+
+The optimal cost = 0.41.
+
+**(e)**
+
+```{r}
+svm.lin <- svm(Purchase ~ ., data = oj.train, kernel = "linear", cost = .41)
+summary(svm.lin)
+svm.lin.pred <- predict(svm.lin, oj.train)
+confusionMatrix(svm.lin.pred, oj.train$Purchase)
+1-.8425 
+svm.lin.pred1 <- predict(svm.lin, oj.test)
+confusionMatrix(svm.lin.pred1, oj.test$Purchase)
+1-.8037
+```
+Training error = 15.75%, test error = 19.63%. Not an improvement.  
+
+**(f)**
+```{r}
+svm.rad <- svm(Purchase ~ ., data = oj.train, kernel = "radial")
+summary(svm.rad)
+svm.rad.pred <- predict(svm.rad, oj.train)
+confusionMatrix(svm.rad.pred, oj.train$Purchase)
+1-.85
+svm.rad.pred1 <- predict(svm.rad, oj.test)
+confusionMatrix(svm.rad.pred1, oj.test$Purchase)
+1-.8111
+```
+Radial SVM train error is 15%, test 18.89%. This is not an improvement over linear SVM. 
+
+```{r}
+set.seed(1)
+tune.svm <- tune(svm, Purchase~., data = oj.train, kernel = "radial", ranges = list(cost = seq(.01, 10, by = .2))) 
+summary(tune.svm)
+```
+```{r}
+svm.rad <- svm(Purchase ~ ., data = oj.train, kernel = "radial", cost = .61)
+summary(svm.rad)
+svm.rad.pred <- predict(svm.rad, oj.train)
+confusionMatrix(svm.rad.pred, oj.train$Purchase)
+1-.8525
+svm.rad.pred1 <- predict(svm.rad, oj.test)
+confusionMatrix(svm.rad.pred1, oj.test$Purchase)
+1-.8037
+```
+Again, not an improvement: tune--or at least the way I am using it--seems to increase variance. 
+
+**(g)**
+
+```{r}
+svm.poly<- svm(Purchase ~ ., data = oj.train, kernel = "polynomial", degree = 2)
+summary(svm.poly)
+svm.poly.pred <- predict(svm.poly, oj.train)
+confusionMatrix(svm.poly.pred, oj.train$Purchase)
+1-.8312
+svm.poly.pred1 <- predict(svm.poly, oj.test)
+confusionMatrix(svm.poly.pred1, oj.test$Purchase)
+1-.7704
+```
+The polynomial SVM of degree 2 has a train error of 16.88% and a test error of 22.96%, markedly worse than the linear SVM. 
+
+```{r}
+set.seed(1)
+tune.svm <- tune(svm, Purchase~., data = oj.train, kernel = "polynomial", degree = 2, ranges = list(cost = seq(.01, 10, by = .2))) 
+summary(tune.svm)
+```
+
+```{r}
+svm.poly<- svm(Purchase ~ ., data = oj.train, kernel = "polynomial", degree = 2, cost = 7.01)
+summary(svm.poly)
+svm.poly.pred <- predict(svm.poly, oj.train)
+confusionMatrix(svm.poly.pred, oj.train$Purchase)
+1-.8525
+svm.poly.pred1 <- predict(svm.poly, oj.test)
+confusionMatrix(svm.poly.pred1, oj.test$Purchase)
+1-.8
+```
+Using the tuned cost parameter, the train error decreases to 14.75% and the test error to 20%. 
+
+**(h)**
+
+The linear SVM when cost = .01 or the radial SVM with the default settings give the same performance. 
